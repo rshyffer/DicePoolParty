@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#083048">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dice Pool Party">
 <title>Dice Pool Party</title>
 </head>
 <body>
@@ -164,12 +167,18 @@
         <output id="peekOut">3.5s</output>
       </div>
       <div class="setRow">
+        <label for="revealModeSwitch">Reveal mode</label>
+        <div class="switch" id="revealModeSwitch"></div>
+      </div>
+      <div id="revealModeDesc" style="color:var(--dim); font-size:12px; margin:-2px 0 10px;"></div>
+      <div class="setRow">
         <label>Sound &amp; vibration</label>
         <div class="switch on" id="soundSwitch"></div>
       </div>
     </div>
     <button class="btn" id="startBtn">Start Game</button>
     <button class="btn secondary" id="resumeBtn" style="display:none;">Resume game</button>
+    <button class="btn secondary" id="installBtn" style="display:none;">📲 Install as an app</button>
     <div class="grow"></div>
     <footer class="credit">Fan-made digital adaptation of <b>Dice Pool Party</b> by Christoph Cantzler &amp; Torsten Marold (© Deep Print Games). For personal use.</footer>
   </section>
@@ -236,6 +245,14 @@
         <h4>The 12 scoring categories</h4>
         <div id="helpScores"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- INSTALL -->
+  <div class="modalBack" id="installBack">
+    <div class="modalCard">
+      <div class="modalHead"><h3>📲 Install as an app</h3><button class="iconbtn" id="installClose">✕</button></div>
+      <div class="modalBody" id="installBody"></div>
     </div>
   </div>
 </div>
@@ -354,7 +371,7 @@ if(typeof document!=='undefined'){ (function(){
     set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
     del(k){ try{ localStorage.removeItem(k); }catch(e){} },
   };
-  const settings = Object.assign({peek:3.5, sound:true}, store.get(SET_KEY)||{});
+  const settings = Object.assign({peek:3.5, sound:true, revealMode:'group'}, store.get(SET_KEY)||{});
   const saveSettings = ()=>store.set(SET_KEY, settings);
 
   /* ---------- audio ---------- */
@@ -557,14 +574,20 @@ if(typeof document!=='undefined'){ (function(){
     settled=true; shakeActive=false;
     state.dice=layoutDice(rollDice());
     state.phase='rolled'; saveGame();
+    renderRolledScreen(false);
+  }
+  /* Shown once dice have settled, and again on resume. Branches on reveal mode:
+     group = one shared splash for everyone; solo = skip straight to per-picker peeks. */
+  function renderRolledScreen(replay){
     setCover(true,'dice have settled…');
     const last = state.round===TOTAL_ROUNDS;
+    const solo = settings.revealMode==='solo' && !last;
     $('gamePanel').innerHTML=`
       <div class="bigmsg">The dice are ready 🎲</div>
-      <div class="submsg">${last?'Final round — everyone’s last category scores automatically!':'Everybody gather round and watch the pool!'}</div>
+      <div class="submsg">${last?'Final round — everyone’s last category scores automatically!':(solo?'Pass the phone around — everyone gets a private peek before picking.':'Everybody gather round and watch the pool!')}</div>
       <div class="grow"></div>
-      <button class="btn pink" id="revealBtn">${last?'Reveal & score!':'3… 2… 1… SPLASH! (reveal)'}</button>`;
-    $('revealBtn').onclick=doReveal;
+      <button class="btn pink" id="revealBtn">${last?'Reveal & score!':(solo?'Start picking!':'3… 2… 1… SPLASH! (reveal)')}</button>`;
+    $('revealBtn').onclick = solo ? ()=>{ state.revealUsed=true; saveGame(); startPicks(); } : ()=>doReveal(replay);
   }
   window.addEventListener('devicemotion', e=>{
     if(!shakeActive) return;
@@ -618,20 +641,39 @@ if(typeof document!=='undefined'){ (function(){
   }
   function nextPicker(){
     if(state.pickIdx>=N()){ applyScores(); showScore(); return; }
-    if(N()===1){ showPickSheet(); return; }
+    const solo = settings.revealMode==='solo' && state.round!==TOTAL_ROUNDS;
+    if(N()===1){ if(solo) startSoloPeek(state.players[0].name, showPickSheet); else showPickSheet(); return; }
     const p=state.players[pickOrder()[state.pickIdx]];
     $('passRound').textContent='Round '+state.round+' · pick '+(state.pickIdx+1)+' of '+N();
     $('passName').textContent=p.name;
-    $('passOkBtn').textContent='I’m '+p.name+' — show my sheet';
-    $('replayBtn').style.display = (allowReplay && state.pickIdx===0) ? '' : 'none';
+    $('passOkBtn').textContent = solo ? ('I’m '+p.name+' — peek at the pool') : ('I’m '+p.name+' — show my sheet');
+    $('replayBtn').style.display = (!solo && allowReplay && state.pickIdx===0) ? '' : 'none';
     showView('pass');
   }
-  $('passOkBtn').onclick=()=>{ allowReplay=false; showPickSheet(); };
+  $('passOkBtn').onclick=()=>{
+    allowReplay=false;
+    const solo = settings.revealMode==='solo' && state.round!==TOTAL_ROUNDS;
+    if(solo){ const p=state.players[pickOrder()[state.pickIdx]]; startSoloPeek(p.name, showPickSheet); }
+    else showPickSheet();
+  };
   $('replayBtn').onclick=()=>{
     allowReplay=false; showView('game'); setCover(true,'get ready…');
     $('gamePanel').innerHTML=`<div class="grow"></div><button class="btn pink" id="revealBtn">3… 2… 1… SPLASH! (reveal)</button>`;
     $('revealBtn').onclick=()=>doReveal(true);
   };
+  /* Solo reveal mode: a private peek for the current picker only, right before their sheet appears. */
+  async function startSoloPeek(name, cb){
+    ac(); showView('game'); setCover(false); drawPool();
+    $('gamePanel').innerHTML=`<div class="bigmsg">${esc(name)}, take a peek! 👀</div><div class="submsg">Memorize what you need, then look away.</div>`;
+    const cd=countdownEl; cd.classList.add('show');
+    const secs=Math.max(1,Math.round(settings.peek)), per=(settings.peek*1000)/secs;
+    for(let s=secs; s>=1; s--){ cd.textContent=s; sndTick(); await sleep(per); }
+    cd.textContent='SPLASH!'; sndSplash(); vib(80); await sleep(400);
+    cd.classList.remove('show');
+    setCover(true,'no peeking!');
+    await sleep(300);
+    cb();
+  }
   function esc(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
   function catIconHTML(cat){
     if(cat.type==='color'){
@@ -831,6 +873,14 @@ if(typeof document!=='undefined'){ (function(){
   $('peekRange').value=settings.peek;
   $('peekOut').textContent=settings.peek+'s';
   $('peekRange').oninput=e=>{ settings.peek=parseFloat(e.target.value); $('peekOut').textContent=settings.peek+'s'; saveSettings(); };
+  function refreshRevealMode(){
+    $('revealModeSwitch').classList.toggle('on', settings.revealMode==='solo');
+    $('revealModeDesc').textContent = settings.revealMode==='solo'
+      ? 'Each player privately peeks at the pool for a few seconds right before picking.'
+      : 'Everyone watches one splash reveal together, then passes the phone around to pick.';
+  }
+  $('revealModeSwitch').onclick=()=>{ settings.revealMode = settings.revealMode==='solo'?'group':'solo'; saveSettings(); refreshRevealMode(); };
+  refreshRevealMode();
   $('soundSwitch').onclick=()=>{ settings.sound=!settings.sound; saveSettings(); refreshMute(); if(settings.sound){ac(); sndTick();} };
   $('startBtn').onclick=()=>{ if(roster.length){ ac(); store.del(SAVE_KEY); newGame(roster.slice()); } };
 
@@ -846,11 +896,8 @@ if(typeof document!=='undefined'){ (function(){
     state=sv; keepAwake(); ac(); updateHdr();
     if(state.phase==='shake' || !state.dice){ beginShake(); showView('game'); }
     else if(state.phase==='rolled'){
-      showView('game'); shakeActive=false; settled=true; setCover(true,'dice have settled…');
-      const last=state.round===TOTAL_ROUNDS;
-      $('gamePanel').innerHTML=`<div class="bigmsg">The dice are ready 🎲</div><div class="grow"></div>
-        <button class="btn pink" id="revealBtn">${last?'Reveal & score!':'3… 2… 1… SPLASH! (reveal)'}</button>`;
-      $('revealBtn').onclick=()=>doReveal(state.revealUsed);
+      showView('game'); shakeActive=false; settled=true;
+      renderRolledScreen(state.revealUsed);
       drawPool();
     }
     else if(state.phase==='picking'){
@@ -860,6 +907,103 @@ if(typeof document!=='undefined'){ (function(){
     else if(state.phase==='scored'){ showScore(); }
     else { beginShake(); showView('game'); }
   };
+
+  /* ---------- install as app (PWA) ---------- */
+  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone===true;
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  let installPrompt=null;
+
+  /* App icon drawn at runtime so the whole game stays a single file. */
+  function makeIcon(size, maskable){
+    const cv=document.createElement('canvas'); cv.width=cv.height=size;
+    const ctx=cv.getContext('2d');
+    ctx.fillStyle='#083048'; ctx.fillRect(0,0,size,size);
+    const pad=size*(maskable?0.16:0.06), rr=size*0.13;
+    ctx.beginPath();
+    ctx.moveTo(pad+rr,pad);
+    ctx.arcTo(size-pad,pad,size-pad,size-pad,rr);
+    ctx.arcTo(size-pad,size-pad,pad,size-pad,rr);
+    ctx.arcTo(pad,size-pad,pad,pad,rr);
+    ctx.arcTo(pad,pad,size-pad,pad,rr);
+    ctx.closePath();
+    const g=ctx.createLinearGradient(0,pad,0,size-pad);
+    g.addColorStop(0,'#9fe3f0'); g.addColorStop(1,'#57bfda');
+    ctx.fillStyle=g; ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=size*0.012;
+    for(let i=0;i<4;i++){
+      const y=pad+(size-2*pad)*(0.15+i*0.24);
+      ctx.beginPath();
+      for(let x=pad;x<=size-pad;x+=size/40){
+        const yy=y+Math.sin((x/size)*Math.PI*4+i*1.7)*size*0.012;
+        x===pad?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+      }
+      ctx.stroke();
+    }
+    drawDie(ctx,{color:'pink',  value:5, x:0.37, y:0.40, sz:0.30, rot:-0.28}, size);
+    drawDie(ctx,{color:'white', value:6, x:0.64, y:0.63, sz:0.36, rot:0.33}, size);
+    ctx.restore();
+    return cv.toDataURL('image/png');
+  }
+
+  function setupInstall(){
+    /* Install only works over http(s) — skip when opened as a local file. */
+    if(!/^https?:$/.test(location.protocol)) return;
+    const icon192=makeIcon(192,false), icon512=makeIcon(512,false), iconMask=makeIcon(512,true);
+    const manifest={
+      name:'Dice Pool Party', short_name:'Dice Pool',
+      description:'Pass-and-play dice game — shake, peek for a few seconds, score smart.',
+      start_url:location.href.split('#')[0],
+      display:'standalone', orientation:'portrait',
+      background_color:'#083048', theme_color:'#083048',
+      icons:[
+        {src:icon192, sizes:'192x192', type:'image/png'},
+        {src:icon512, sizes:'512x512', type:'image/png'},
+        {src:iconMask, sizes:'512x512', type:'image/png', purpose:'maskable'},
+      ],
+    };
+    const link=document.createElement('link');
+    link.rel='manifest';
+    link.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
+    document.head.appendChild(link);
+    const touch=document.createElement('link');
+    touch.rel='apple-touch-icon'; touch.href=icon192;
+    document.head.appendChild(touch);
+    if(!isStandalone) $('installBtn').style.display='';
+  }
+
+  function showInstallHelp(){
+    $('installBody').innerHTML = isIOS ? `
+      <p>On iPhone &amp; iPad, install from <b>Safari</b>:</p>
+      <div class="helpStep"><span class="n">1</span><span>Tap the <b>Share</b> button — the square with an arrow pointing up, in the toolbar.</span></div>
+      <div class="helpStep"><span class="n">2</span><span>Scroll down and tap <b>Add to Home Screen</b>.</span></div>
+      <div class="helpStep"><span class="n">3</span><span>Tap <b>Add</b> — the game gets its own icon and opens full-screen like an app.</span></div>`
+    : `
+      <p>Install from your browser's menu:</p>
+      <div class="helpStep"><span class="n">1</span><span>Open the browser menu (<b>⋮</b> in Chrome, <b>≡</b> in others).</span></div>
+      <div class="helpStep"><span class="n">2</span><span>Tap <b>Add to Home screen</b> or <b>Install app</b>.</span></div>
+      <div class="helpStep"><span class="n">3</span><span>Confirm — the game gets its own icon and opens full-screen like an app.</span></div>`;
+    $('installBack').classList.add('show');
+  }
+  $('installClose').onclick=()=>$('installBack').classList.remove('show');
+  $('installBack').addEventListener('click', e=>{ if(e.target===$('installBack')) $('installBack').classList.remove('show'); });
+
+  window.addEventListener('beforeinstallprompt', e=>{
+    e.preventDefault(); installPrompt=e;
+    if(!isStandalone) $('installBtn').style.display='';
+  });
+  window.addEventListener('appinstalled', ()=>{ installPrompt=null; $('installBtn').style.display='none'; });
+  $('installBtn').onclick=async ()=>{
+    if(installPrompt){
+      installPrompt.prompt();
+      const choice=await installPrompt.userChoice;
+      installPrompt=null;
+      if(choice.outcome==='accepted') $('installBtn').style.display='none';
+    }else{
+      showInstallHelp();
+    }
+  };
+  setupInstall();
 
   refreshMenu(); showView('menu');
 })(); }
