@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#083048">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Dice Pool Party</title>
+</head>
+<body>
+<!--APP-START-->
+<style>
+  :root{
+    --bg1:#083048; --bg2:#0b4a66; --water:#8fdcec; --water2:#5ec4dd;
+    --ink:#f2fbff; --dim:#9cc6d6; --accent:#ffb703; --accent2:#ff5d8f;
+    --card:#0e3a52; --card2:#134963; --good:#7ee081; --line:#1d5977;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0; background:linear-gradient(180deg,var(--bg1),var(--bg2) 60%,#0d5570);
+    color:var(--ink); font-family:ui-rounded,"Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+    overscroll-behavior:none; touch-action:manipulation; user-select:none; -webkit-user-select:none;
+  }
+  #app{max-width:520px; margin:0 auto; min-height:100dvh; display:flex; flex-direction:column; padding:env(safe-area-inset-top) 12px calc(env(safe-area-inset-bottom) + 10px);}
+  header#hdr{display:none; align-items:center; gap:8px; padding:8px 2px;}
+  header#hdr .round{font-weight:800; font-size:15px; letter-spacing:.4px;}
+  header#hdr .spacer{flex:1;}
+  .iconbtn{background:var(--card); border:1px solid var(--line); color:var(--ink); border-radius:10px; font-size:16px; padding:6px 10px; cursor:pointer;}
+  section.view{display:none; flex:1; flex-direction:column; min-height:0;}
+  section.view.active{display:flex;}
+  h1.logo{margin:18px 0 2px; text-align:center; font-size:34px; letter-spacing:1px; line-height:1.05;}
+  h1.logo .splashy{color:var(--accent2);} h1.logo .poolw{color:var(--water);}
+  .tag{text-align:center; color:var(--dim); margin:0 0 14px; font-size:13px;}
+  .panel{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; margin-bottom:12px;}
+  .panel h2{margin:0 0 10px; font-size:14px; text-transform:uppercase; letter-spacing:1px; color:var(--dim);}
+  .roster{display:flex; flex-direction:column; gap:6px;}
+  .rosterRow{display:flex; align-items:center; gap:8px; background:var(--card2); border-radius:10px; padding:7px 10px;}
+  .rosterRow .nm{flex:1; font-weight:700;}
+  .rosterRow button{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:2px 6px;}
+  .addRow{display:flex; gap:8px; margin-top:8px;}
+  .addRow input{flex:1; background:var(--card2); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:9px 10px; font-size:15px; outline:none;}
+  .btn{display:block; width:100%; border:none; border-radius:14px; padding:14px; font-size:17px; font-weight:800; cursor:pointer; color:#082533; background:var(--accent); letter-spacing:.3px;}
+  .btn.secondary{background:var(--card2); color:var(--ink); border:1px solid var(--line); font-weight:700;}
+  .btn.pink{background:var(--accent2); color:#fff;}
+  .btn:disabled{opacity:.4;}
+  .btn + .btn{margin-top:8px;}
+  .setRow{display:flex; align-items:center; gap:10px; padding:6px 0;}
+  .setRow label{flex:1; font-size:14px;}
+  .setRow output{min-width:42px; text-align:right; font-weight:700; color:var(--accent);}
+  input[type=range]{flex:2; accent-color:var(--accent);}
+  .switch{width:46px;height:26px;border-radius:13px;background:var(--card2);border:1px solid var(--line);position:relative;cursor:pointer;}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--dim);transition:.15s;}
+  .switch.on{background:var(--accent);} .switch.on::after{left:22px;background:#083048;}
+  /* pool */
+  #poolWrap{position:relative; width:100%; aspect-ratio:6/5; border-radius:18px; overflow:hidden;
+    box-shadow:0 8px 24px rgba(0,0,0,.35), inset 0 0 0 6px #d9f3fa22; background:var(--water); flex:none;}
+  #pool{position:absolute; inset:0; width:100%; height:100%;}
+  #cover{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:6px;
+    background:repeating-linear-gradient(135deg,#0d476b 0 26px,#0f527b 26px 52px);
+    border:6px solid #0a3a58; border-radius:18px; transition:transform .45s cubic-bezier(.5,-.2,.6,1); z-index:3;}
+  #cover.off{transform:translateY(-118%) rotate(-5deg);}
+  #cover .clabel{font-weight:900; font-size:22px; letter-spacing:2px; color:#bfe8f7; opacity:.9;}
+  #cover .csub{font-size:12px; color:#8fc4dd;}
+  #countdown{position:absolute; top:6px; left:0; right:0; text-align:center; z-index:4; pointer-events:none;
+    font-size:44px; font-weight:900; color:#fff; text-shadow:0 2px 10px rgba(4,40,60,.8); opacity:0; transition:opacity .1s;}
+  #countdown.show{opacity:1;}
+  #gamePanel{flex:1; display:flex; flex-direction:column; padding-top:12px; min-height:0;}
+  .bigmsg{text-align:center; font-size:20px; font-weight:800; margin:4px 0 2px;}
+  .submsg{text-align:center; color:var(--dim); font-size:14px; margin:2px 0 12px;}
+  .shakebar{height:14px; background:var(--card2); border:1px solid var(--line); border-radius:8px; overflow:hidden; margin:8px 0 14px;}
+  .shakebar > div{height:100%; width:0%; background:linear-gradient(90deg,var(--water2),var(--accent)); transition:width .12s;}
+  .linkish{background:none; border:none; color:var(--dim); text-decoration:underline; font-size:13px; cursor:pointer; margin-top:10px;}
+  .grow{flex:1;}
+  /* pass / pick */
+  .centerbox{flex:1; display:flex; flex-direction:column; justify-content:center; text-align:center; gap:6px;}
+  .passname{font-size:34px; font-weight:900; color:var(--accent); margin:6px 0 18px;}
+  .sheet{flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:5px; min-height:0; padding-bottom:6px;}
+  .catRow{display:flex; align-items:center; gap:10px; background:var(--card); border:1.5px solid var(--line); border-radius:12px; padding:8px 10px; cursor:pointer;}
+  .catRow.scored{opacity:.5; cursor:default;}
+  .catRow.sel{border-color:var(--accent); background:#1b4f2d33; box-shadow:0 0 0 2px var(--accent) inset;}
+  .catRow .ic{display:flex; align-items:center; gap:3px; width:64px; flex:none;}
+  .catRow .lbl{flex:1; font-weight:700; font-size:15px;}
+  .catRow .pts{font-weight:900; font-size:16px; color:var(--good); min-width:34px; text-align:right;}
+  .catRow .open{color:var(--dim); font-size:18px; min-width:34px; text-align:right;}
+  .sw{display:inline-block; width:20px; height:20px; border-radius:5px; border:3px solid #000;}
+  .totalsStrip{display:flex; gap:6px; overflow-x:auto; padding:8px 0; flex:none;}
+  .chip{background:var(--card2); border:1px solid var(--line); border-radius:20px; padding:5px 11px; font-size:13px; white-space:nowrap;}
+  .chip b{color:var(--accent);}
+  .chip.me{border-color:var(--accent);}
+  /* score screen */
+  .resList{display:flex; flex-direction:column; gap:6px; overflow-y:auto; min-height:0; flex:1; padding-bottom:6px;}
+  .resRow{display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:9px 12px;}
+  .resRow .who{flex:1;} .resRow .who b{font-size:15px;} .resRow .who .cat{display:block; font-size:12px; color:var(--dim);}
+  .resRow .gain{font-size:19px; font-weight:900; color:var(--good);}
+  .resRow .tot{font-size:12px; color:var(--dim); min-width:52px; text-align:right;}
+  .standRow{display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:11px 12px; margin-bottom:6px;}
+  .standRow.win{border-color:var(--accent); background:#3a2f0a55;}
+  .standRow .plc{font-size:18px; width:30px;} .standRow .nm{flex:1; font-weight:800; font-size:16px;}
+  .standRow .tt{font-size:20px; font-weight:900; color:var(--accent);}
+  .note{color:var(--dim); font-size:12.5px; text-align:center; margin:6px 0;}
+  /* help modal */
+  .menuHelp{position:absolute; top:10px; right:0; z-index:5;}
+  #view-menu{position:relative;}
+  .modalBack{position:fixed; inset:0; background:rgba(3,25,38,.78); z-index:50; display:none; align-items:flex-end; justify-content:center;}
+  .modalBack.show{display:flex;}
+  .modalCard{background:var(--card); border:1px solid var(--line); border-radius:18px 18px 0 0; max-width:520px; width:100%; max-height:88dvh; display:flex; flex-direction:column; box-shadow:0 -8px 30px rgba(0,0,0,.5);}
+  .modalHead{display:flex; align-items:center; gap:8px; padding:12px 14px; border-bottom:1px solid var(--line); flex:none;}
+  .modalHead h3{margin:0; flex:1; font-size:17px;}
+  .modalBody{overflow-y:auto; padding:12px 14px 18px; font-size:14px; line-height:1.5;}
+  .modalBody h4{margin:14px 0 6px; font-size:13px; text-transform:uppercase; letter-spacing:1px; color:var(--dim);}
+  .helpStep{display:flex; gap:10px; margin-bottom:7px; align-items:flex-start;}
+  .helpStep .n{flex:none; width:22px; height:22px; border-radius:50%; background:var(--card2); border:1px solid var(--line); color:var(--accent); font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; margin-top:1px;}
+  .scoreRow{display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line);}
+  .scoreRow:last-child{border-bottom:none;}
+  .scoreRow .ic{flex:none; width:76px; display:flex; flex-wrap:wrap; gap:3px; align-items:center;}
+  .scoreRow .tx{flex:1; font-size:13px; color:var(--dim);}
+  .scoreRow .tx b{display:block; color:var(--ink); font-size:14px;}
+  /* scoresheet table */
+  #sheetBack{align-items:flex-start; padding:calc(env(safe-area-inset-top) + 14px) 10px 0;}
+  #sheetBack .modalCard{border-radius:18px;}
+  .sheetWrap{overflow:auto; max-height:70dvh;}
+  table.sheetTable{border-collapse:collapse; width:100%; font-size:13px; font-variant-numeric:tabular-nums;}
+  .sheetTable th,.sheetTable td{padding:6px 9px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap;}
+  .sheetTable th:first-child,.sheetTable td:first-child{text-align:left; position:sticky; left:0; background:var(--card); font-weight:600; z-index:1;}
+  .sheetTable thead th{position:sticky; top:0; background:var(--card); color:var(--accent); z-index:2;}
+  .sheetTable thead th:first-child{z-index:3;}
+  .sheetTable td.new{color:var(--good); font-weight:900;}
+  .sheetTable td.blank{color:#3a6880;}
+  .sheetTable tfoot td{font-weight:900; color:var(--accent); border-top:2px solid var(--line); border-bottom:none;}
+  .shakeAnim{animation:jig .12s;}
+  @keyframes jig{25%{transform:translate(3px,-3px) rotate(.8deg);}75%{transform:translate(-3px,2px) rotate(-.8deg);}}
+  footer.credit{text-align:center; color:#79aabf; font-size:11px; padding:10px 0 2px;}
+  footer.credit a{color:#9fd3e6;}
+</style>
+
+<div id="app">
+  <header id="hdr">
+    <span class="round" id="hdrRound">Round 1 / 12</span>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="helpBtn" title="How to play">?</button>
+    <button class="iconbtn" id="muteBtn" title="Sound">🔊</button>
+    <button class="iconbtn" id="quitBtn" title="Quit to menu">✕</button>
+  </header>
+
+  <!-- MENU -->
+  <section class="view" id="view-menu">
+    <button class="iconbtn menuHelp" id="helpBtnMenu" title="How to play">?</button>
+    <h1 class="logo"><span class="splashy">DICE</span> <span class="poolw">POOL</span> PARTY</h1>
+    <p class="tag">Shake it. Peek for 3 seconds. Score smart. 12 rounds.</p>
+    <div class="panel">
+      <h2>Swimmers (1–8)</h2>
+      <div class="roster" id="roster"></div>
+      <div class="addRow">
+        <input id="nameInput" maxlength="12" placeholder="Add player name…" autocomplete="off">
+        <button class="iconbtn" id="addBtn">＋</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Settings</h2>
+      <div class="setRow">
+        <label for="peekRange">Peek time</label>
+        <input type="range" id="peekRange" min="2" max="6" step="0.5" value="3.5">
+        <output id="peekOut">3.5s</output>
+      </div>
+      <div class="setRow">
+        <label>Sound &amp; vibration</label>
+        <div class="switch on" id="soundSwitch"></div>
+      </div>
+    </div>
+    <button class="btn" id="startBtn">Start Game</button>
+    <button class="btn secondary" id="resumeBtn" style="display:none;">Resume game</button>
+    <div class="grow"></div>
+    <footer class="credit">Fan-made digital adaptation of <b>Dice Pool Party</b> by Christoph Cantzler &amp; Torsten Marold (© Deep Print Games). For personal use.</footer>
+  </section>
+
+  <!-- GAME (pool + dynamic panel) -->
+  <section class="view" id="view-game">
+    <div id="poolWrap">
+      <canvas id="pool"></canvas>
+      <div id="cover"><div class="clabel">🌊 THE POOL 🌊</div><div class="csub" id="coverSub">covered</div></div>
+      <div id="countdown"></div>
+    </div>
+    <div id="gamePanel"></div>
+  </section>
+
+  <!-- PASS -->
+  <section class="view" id="view-pass">
+    <div class="centerbox">
+      <div class="submsg" id="passRound"></div>
+      <div style="font-size:16px;color:var(--dim);">Pass the phone to</div>
+      <div class="passname" id="passName"></div>
+      <button class="btn" id="passOkBtn">I’m here — show my sheet</button>
+      <button class="linkish" id="replayBtn" style="display:none;">Phone died during the splash? Replay the reveal</button>
+    </div>
+  </section>
+
+  <!-- PICK -->
+  <section class="view" id="view-pick">
+    <div class="bigmsg" id="pickWho"></div>
+    <div class="submsg">Secretly choose ONE category to score this round</div>
+    <div class="sheet" id="sheet"></div>
+    <div class="totalsStrip" id="totalsStrip"></div>
+    <button class="btn" id="lockBtn" disabled>Lock it in</button>
+  </section>
+
+  <!-- GAME OVER -->
+  <section class="view" id="view-over">
+    <h1 class="logo" style="font-size:28px;">🏆 FINAL SPLASH-DOWN</h1>
+    <div id="standings" style="margin-top:10px;"></div>
+    <div class="note" id="tieNote"></div>
+    <div class="grow"></div>
+    <button class="btn secondary" id="sheetsBtn2">📋 View scoresheets</button>
+    <button class="btn" id="againBtn">Play again (same swimmers)</button>
+    <button class="btn secondary" id="menuBtn">Back to menu</button>
+  </section>
+
+  <!-- SCORESHEETS -->
+  <div class="modalBack" id="sheetBack">
+    <div class="modalCard">
+      <div class="modalHead"><h3>Scoresheets</h3><button class="iconbtn" id="sheetClose">✕</button></div>
+      <div class="modalBody"><div class="sheetWrap" id="sheetTableWrap"></div></div>
+    </div>
+  </div>
+
+  <!-- HELP -->
+  <div class="modalBack" id="helpBack">
+    <div class="modalCard">
+      <div class="modalHead"><h3>How to play</h3><button class="iconbtn" id="helpClose">✕</button></div>
+      <div class="modalBody">
+        <div class="helpStep"><span class="n">1</span><span><b>Shake</b> — the shaker gives the phone a really good shake.</span></div>
+        <div class="helpStep"><span class="n">2</span><span><b>Splash!</b> — the pool is revealed for just a few seconds. Memorize the dice!</span></div>
+        <div class="helpStep"><span class="n">3</span><span><b>Pick</b> — pass the phone around; everyone secretly picks ONE category they haven’t scored yet.</span></div>
+        <div class="helpStep"><span class="n">4</span><span><b>Score</b> — the pool is uncovered and points are added automatically.</span></div>
+        <p style="color:var(--dim); font-size:13px; margin:8px 0 0;">12 rounds, and each category can be scored only once — in round 12 your last category scores automatically. Highest total wins; ties are broken by the Pool Party score.</p>
+        <h4>The 12 scoring categories</h4>
+        <div id="helpScores"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ================= PURE GAME LOGIC ================= */
+const COLORS = [
+  {id:'pink',   label:'Pink',   face:'#ff9ec7', pip:'#a91e63', size:'small'},
+  {id:'purple', label:'Purple', face:'#9d74d0', pip:'#3d1466', size:'small'},
+  {id:'yellow', label:'Yellow', face:'#ffc84a', pip:'#7a5200', size:'small'},
+  {id:'white',  label:'White',  face:'#f4f2ec', pip:'#39404a', size:'large'},
+  {id:'blue',   label:'Blue',   face:'#3e6cb8', pip:'#eaf4ff', size:'large'},
+  {id:'green',  label:'Green',  face:'#79b04a', pip:'#f2ffe8', size:'large'},
+];
+const COLOR_MAP = Object.fromEntries(COLORS.map(c=>[c.id,c]));
+const CATEGORIES = [
+  ...COLORS.map(c=>({id:c.id, name:c.label+' pair', type:'color'})),
+  {id:'doubles', name:'Doubles', type:'doubles'},
+  {id:'low',     name:'1s, 2s & 3s', type:'low'},
+  {id:'fours',   name:'Fours',  type:'num', n:4},
+  {id:'fives',   name:'Fives',  type:'num', n:5},
+  {id:'sixes',   name:'Sixes',  type:'num', n:6},
+  {id:'party',   name:'Pool Party', type:'party'},
+];
+const CAT_MAP = Object.fromEntries(CATEGORIES.map(c=>[c.id,c]));
+
+function rollDice(rand){
+  rand = rand || Math.random;
+  const dice = [];
+  for(const c of COLORS)
+    for(let i=0;i<2;i++)
+      dice.push({color:c.id, value:1+Math.floor(rand()*6)});
+  return dice;
+}
+
+/* Scatter dice in pool space: width=1, height=POOL_H. Adds x,y,rot,sz to each die. */
+const POOL_H = 5/6;
+function layoutDice(dice, rand){
+  rand = rand || Math.random;
+  const SZ = {small:0.095, large:0.115};
+  const order = dice.map((d,i)=>i).sort(()=>rand()-0.5);
+  let gap = 0.045;
+  for(let attemptRound=0; attemptRound<6; attemptRound++){
+    const placed = [];
+    let ok = true;
+    for(const idx of order){
+      const d = dice[idx];
+      const s = SZ[COLOR_MAP[d.color].size];
+      const r = s*0.72;
+      let found = false;
+      for(let t=0; t<600; t++){
+        const x = r+0.03 + rand()*(1-2*(r+0.03));
+        const y = r+0.03 + rand()*(POOL_H-2*(r+0.03));
+        if(placed.every(p => Math.hypot(p.x-x,p.y-y) >= p.r + r + gap)){
+          placed.push({idx,x,y,r}); found = true; break;
+        }
+      }
+      if(!found){ ok=false; break; }
+    }
+    if(ok){
+      for(const p of placed){
+        const d = dice[p.idx];
+        d.x=p.x; d.y=p.y; d.sz=SZ[COLOR_MAP[d.color].size];
+        d.rot=(rand()*2-1)*Math.PI;
+      }
+      return dice;
+    }
+    gap *= 0.6; // pool too crowded at this margin — relax and retry
+  }
+  // deterministic grid fallback (should never happen)
+  dice.forEach((d,i)=>{ d.x=0.14+(i%4)*0.24; d.y=0.14+Math.floor(i/4)*0.26;
+    d.sz=SZ[COLOR_MAP[d.color].size]; d.rot=0; });
+  return dice;
+}
+
+function scoreCategory(catId, dice){
+  const cat = CAT_MAP[catId];
+  if(cat.type==='color'){
+    const pair = dice.filter(d=>d.color===catId);
+    return {pts:pair[0].value+pair[1].value, detail:pair[0].value+' + '+pair[1].value};
+  }
+  if(cat.type==='doubles'){
+    let n=0; const names=[];
+    for(const c of COLORS){
+      const pair = dice.filter(d=>d.color===c.id);
+      if(pair[0].value===pair[1].value){ n++; names.push(c.label.toLowerCase()+' '+pair[0].value+'s'); }
+    }
+    return {pts:n*10, detail:n? n+' matching pair'+(n>1?'s':'')+' ('+names.join(', ')+') × 10' : 'no matching pairs'};
+  }
+  if(cat.type==='low'){
+    const vals = dice.filter(d=>d.value<=3).map(d=>d.value).sort((a,b)=>a-b);
+    return {pts:vals.reduce((a,b)=>a+b,0), detail:vals.length? vals.join(' + ') : 'no 1s, 2s or 3s'};
+  }
+  if(cat.type==='num'){
+    const cnt = dice.filter(d=>d.value===cat.n).length;
+    return {pts:cnt*cat.n, detail:cnt? cnt+' × '+cat.n : 'no '+cat.n+'s'};
+  }
+  // party
+  return {pts:dice.reduce((a,d)=>a+d.value,0), detail:'all 12 dice added up'};
+}
+
+if(typeof module!=='undefined' && module.exports){
+  module.exports = {COLORS, CATEGORIES, rollDice, layoutDice, scoreCategory, POOL_H};
+}
+
+/* ================= APP (browser only) ================= */
+if(typeof document!=='undefined'){ (function(){
+  const $ = id => document.getElementById(id);
+  const TOTAL_ROUNDS = 12;
+  const SAVE_KEY='dpp_save_v1', SET_KEY='dpp_settings_v1', ROSTER_KEY='dpp_roster_v1';
+
+  /* ---------- storage ---------- */
+  const store = {
+    get(k){ try{ return JSON.parse(localStorage.getItem(k)); }catch(e){ return null; } },
+    set(k,v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} },
+    del(k){ try{ localStorage.removeItem(k); }catch(e){} },
+  };
+  const settings = Object.assign({peek:3.5, sound:true}, store.get(SET_KEY)||{});
+  const saveSettings = ()=>store.set(SET_KEY, settings);
+
+  /* ---------- audio ---------- */
+  let AC=null, noiseBuf=null;
+  function ac(){
+    if(!settings.sound) return null;
+    try{
+      AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+      if(AC.state==='suspended') AC.resume();
+      if(!noiseBuf){
+        noiseBuf = AC.createBuffer(1, AC.sampleRate*0.5, AC.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+      }
+      return AC;
+    }catch(e){ return null; }
+  }
+  function noiseHit(when, dur, freq, q, vol){
+    const c=ac(); if(!c) return;
+    const src=c.createBufferSource(); src.buffer=noiseBuf;
+    const f=c.createBiquadFilter(); f.type='bandpass'; f.frequency.value=freq; f.Q.value=q;
+    const g=c.createGain();
+    g.gain.setValueAtTime(vol, when); g.gain.exponentialRampToValueAtTime(0.001, when+dur);
+    src.connect(f).connect(g).connect(c.destination);
+    src.start(when); src.stop(when+dur+0.02);
+  }
+  function sndRattle(intensity){
+    const c=ac(); if(!c) return;
+    const t=c.currentTime, hits=2+Math.floor(Math.random()*3);
+    for(let i=0;i<hits;i++)
+      noiseHit(t+Math.random()*0.09, 0.03+Math.random()*0.04, 1400+Math.random()*2800, 4, Math.min(0.5, 0.12+intensity*0.02));
+  }
+  function sndTick(){
+    const c=ac(); if(!c) return;
+    const o=c.createOscillator(), g=c.createGain();
+    o.type='square'; o.frequency.value=880;
+    g.gain.setValueAtTime(0.12, c.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime+0.07);
+    o.connect(g).connect(c.destination); o.start(); o.stop(c.currentTime+0.09);
+  }
+  function sndSplash(){
+    const c=ac(); if(!c) return;
+    const t=c.currentTime;
+    const src=c.createBufferSource(); src.buffer=noiseBuf; src.loop=true;
+    const f=c.createBiquadFilter(); f.type='lowpass';
+    f.frequency.setValueAtTime(5500,t); f.frequency.exponentialRampToValueAtTime(250,t+0.55);
+    const g=c.createGain();
+    g.gain.setValueAtTime(0.4,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.55);
+    src.connect(f).connect(g).connect(c.destination); src.start(t); src.stop(t+0.6);
+  }
+  function sndFanfare(){
+    const c=ac(); if(!c) return;
+    [523,659,784,1047].forEach((fr,i)=>{
+      const o=c.createOscillator(), g=c.createGain(), t=c.currentTime+i*0.14;
+      o.type='triangle'; o.frequency.value=fr;
+      g.gain.setValueAtTime(0.001,t); g.gain.linearRampToValueAtTime(0.22,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.001,t+ (i===3?0.6:0.16));
+      o.connect(g).connect(c.destination); o.start(t); o.stop(t+0.7);
+    });
+  }
+  function vib(ms){ if(settings.sound && navigator.vibrate) try{navigator.vibrate(ms);}catch(e){} }
+
+  /* ---------- wake lock ---------- */
+  let wakeLock=null;
+  async function keepAwake(){
+    try{ if('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
+  }
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && state) keepAwake();
+    if(document.visibilityState==='hidden' && state) saveGame();
+  });
+
+  /* ---------- views ---------- */
+  const views=['menu','game','pass','pick','over'];
+  function showView(name){
+    for(const v of views) $('view-'+v).classList.toggle('active', v===name);
+    $('hdr').style.display = (name==='menu') ? 'none' : 'flex';
+  }
+
+  /* ---------- pool canvas ---------- */
+  const canvas=$('pool'), poolWrap=$('poolWrap'), cover=$('cover'), countdownEl=$('countdown');
+  function svgDieStr(face,pip,value,size){
+    const pos={1:[[0,0]],2:[[-1,-1],[1,1]],3:[[-1,-1],[0,0],[1,1]],
+      4:[[-1,-1],[1,-1],[-1,1],[1,1]],5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],
+      6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]}[value]||[];
+    const o=size*0.26, c=size/2, r=size*0.09;
+    let pips=pos.map(p=>`<circle cx="${c+p[0]*o}" cy="${c+p[1]*o}" r="${r}" fill="${pip}"/>`).join('');
+    return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex:none">
+      <rect x="1.5" y="1.5" width="${size-3}" height="${size-3}" rx="${size*0.2}" fill="${face}" stroke="${pip}" stroke-width="${Math.max(2,size*0.11)}"/>${pips}</svg>`;
+  }
+  function drawWater(ctx,W,H){
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#9fe3f0'); g.addColorStop(1,'#57bfda');
+    ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(255,255,255,0.28)'; ctx.lineWidth=Math.max(1.5,W*0.004);
+    for(let i=0;i<7;i++){
+      const y=H*(0.08+i*0.14);
+      ctx.beginPath();
+      for(let x=0;x<=W;x+=6){
+        const yy=y+Math.sin((x/W)*Math.PI*4+i*1.7)*H*0.012;
+        x===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+      }
+      ctx.stroke();
+    }
+  }
+  function drawDie(ctx,d,W){
+    const cfg=COLOR_MAP[d.color], s=d.sz*W, x=d.x*W, y=d.y*W;
+    ctx.save(); ctx.translate(x,y); ctx.rotate(d.rot);
+    ctx.shadowColor='rgba(3,40,60,0.45)'; ctx.shadowBlur=s*0.18; ctx.shadowOffsetY=s*0.08;
+    const h=s/2, rr=s*0.18;
+    ctx.beginPath();
+    ctx.moveTo(-h+rr,-h); ctx.arcTo(h,-h,h,h,rr); ctx.arcTo(h,h,-h,h,rr);
+    ctx.arcTo(-h,h,-h,-h,rr); ctx.arcTo(-h,-h,h,-h,rr); ctx.closePath();
+    ctx.fillStyle=cfg.face; ctx.fill();
+    ctx.shadowColor='transparent';
+    ctx.lineWidth=s*0.1; ctx.strokeStyle=cfg.pip; ctx.stroke();
+    const pos={1:[[0,0]],2:[[-1,-1],[1,1]],3:[[-1,-1],[0,0],[1,1]],
+      4:[[-1,-1],[1,-1],[-1,1],[1,1]],5:[[-1,-1],[1,-1],[0,0],[-1,1],[1,1]],
+      6:[[-1,-1],[1,-1],[-1,0],[1,0],[-1,1],[1,1]]}[d.value];
+    ctx.fillStyle=cfg.pip;
+    const o=s*0.24, pr=s*0.085;
+    for(const p of pos){ ctx.beginPath(); ctx.arc(p[0]*o,p[1]*o,pr,0,7); ctx.fill(); }
+    ctx.restore();
+  }
+  function drawPool(){
+    const dpr=window.devicePixelRatio||1;
+    const rect=poolWrap.getBoundingClientRect();
+    canvas.width=Math.round(rect.width*dpr); canvas.height=Math.round(rect.height*dpr);
+    const ctx=canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    drawWater(ctx,rect.width,rect.height);
+    if(state && state.dice && state.dice[0].x!==undefined)
+      for(const d of state.dice) drawDie(ctx,d,rect.width);
+  }
+  window.addEventListener('resize', ()=>{ if($('view-game').classList.contains('active')) drawPool(); });
+  function setCover(on, sub){
+    cover.classList.toggle('off', !on);
+    if(sub!==undefined) $('coverSub').textContent=sub;
+  }
+
+  /* ---------- game state ---------- */
+  let state=null;
+  function newGame(names){
+    state={
+      players:names.map(n=>({name:n, scores:{}})),
+      round:1, shaker:0, dice:null, revealUsed:false,
+      picks:{}, pickIdx:0, phase:'shake', results:null,
+    };
+    keepAwake(); saveGame(); beginShake(); showView('game');
+  }
+  function saveGame(){ if(state) store.set(SAVE_KEY, state); }
+  function totalOf(p){ return Object.values(p.scores).reduce((a,b)=>a+b,0); }
+  function remainingCats(p){ return CATEGORIES.filter(c=>!(c.id in p.scores)); }
+  function updateHdr(){ $('hdrRound').textContent='Round '+state.round+' / '+TOTAL_ROUNDS; }
+  const N=()=>state.players.length;
+  const pickOrder=()=>Array.from({length:N()},(_,i)=>(state.shaker+1+i)%N());
+
+  /* ---------- shake phase ---------- */
+  const SHAKE_TARGET=140;
+  let shakeActive=false, energy=0, lastG=null, lastJolt=0, settleTimer=null, settled=false;
+
+  function beginShake(){
+    state.phase='shake'; state.dice=null; state.revealUsed=false;
+    state.picks={}; state.pickIdx=0; state.results=null;
+    energy=0; lastG=null; settled=false; shakeActive=true;
+    updateHdr(); setCover(true,'give it a good shake!');
+    const shakerName=state.players[state.shaker].name;
+    $('gamePanel').innerHTML=`
+      <div class="bigmsg">${esc(shakerName)}, shake the phone! 📱</div>
+      <div class="submsg">Hold it tight and give it a really good shake</div>
+      <div class="shakebar"><div id="shakeFill"></div></div>
+      <div class="submsg" id="shakeMsg">&nbsp;</div>
+      <div class="grow"></div>
+      <button class="linkish" id="noShakeBtn">Can’t shake? Tap to roll instead</button>`;
+    $('noShakeBtn').onclick=()=>{ ac(); sndRattle(8); vib(60); energy=SHAKE_TARGET; updateShakeUI(); scheduleSettle(300); };
+    drawPool(); saveGame();
+  }
+  function updateShakeUI(){
+    const f=$('shakeFill'); if(!f) return;
+    f.style.width=Math.min(100, energy/SHAKE_TARGET*100)+'%';
+    const m=$('shakeMsg');
+    if(energy>=SHAKE_TARGET) m.textContent='Nicely shaken! Now hold still…';
+    else if(energy>0) m.textContent='Keep shaking!';
+  }
+  function jolt(strength){
+    const now=performance.now();
+    if(now-lastJolt<80) return;
+    lastJolt=now;
+    energy+=Math.min(25,strength);
+    sndRattle(strength); vib(20);
+    poolWrap.classList.remove('shakeAnim'); void poolWrap.offsetWidth; poolWrap.classList.add('shakeAnim');
+    updateShakeUI();
+    if(energy>=SHAKE_TARGET) scheduleSettle(700);
+  }
+  function scheduleSettle(ms){
+    clearTimeout(settleTimer);
+    settleTimer=setTimeout(()=>{ if(shakeActive && energy>=SHAKE_TARGET && !settled) onSettled(); }, ms);
+  }
+  function onSettled(){
+    settled=true; shakeActive=false;
+    state.dice=layoutDice(rollDice());
+    state.phase='rolled'; saveGame();
+    setCover(true,'dice have settled…');
+    const last = state.round===TOTAL_ROUNDS;
+    $('gamePanel').innerHTML=`
+      <div class="bigmsg">The dice are ready 🎲</div>
+      <div class="submsg">${last?'Final round — everyone’s last category scores automatically!':'Everybody gather round and watch the pool!'}</div>
+      <div class="grow"></div>
+      <button class="btn pink" id="revealBtn">${last?'Reveal & score!':'3… 2… 1… SPLASH! (reveal)'}</button>`;
+    $('revealBtn').onclick=doReveal;
+  }
+  window.addEventListener('devicemotion', e=>{
+    if(!shakeActive) return;
+    const a=e.acceleration;
+    if(a && a.x!=null && (Math.abs(a.x)+Math.abs(a.y)+Math.abs(a.z))>0){
+      const mag=Math.hypot(a.x,a.y,a.z);
+      if(mag>11) jolt(mag-6);
+    }else{
+      const g=e.accelerationIncludingGravity;
+      if(!g || g.x==null) return;
+      const m=Math.hypot(g.x,g.y,g.z);
+      if(lastG!=null && Math.abs(m-lastG)>7) jolt(Math.abs(m-lastG));
+      lastG=m;
+    }
+  });
+
+  /* ---------- reveal ---------- */
+  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  async function doReveal(replay){
+    const btn=$('revealBtn'); if(btn) btn.disabled=true;
+    if(!replay){ state.revealUsed=true; saveGame(); }
+    if(state.round===TOTAL_ROUNDS){ finalReveal(); return; }
+    ac();
+    const t=settings.peek*1000;
+    setCover(false); drawPool();
+    const cd=countdownEl;
+    cd.classList.add('show');
+    cd.textContent='3'; sndTick(); await sleep(t*0.3);
+    cd.textContent='2'; sndTick(); await sleep(t*0.3);
+    cd.textContent='1'; sndTick(); await sleep(t*0.25);
+    cd.textContent='SPLASH!'; sndSplash(); vib(120); await sleep(Math.max(400,t*0.15));
+    cd.classList.remove('show');
+    setCover(true,'no peeking!');
+    await sleep(500);
+    startPicks();
+  }
+  function finalReveal(){
+    setCover(false,''); sndSplash(); vib(120);
+    for(const p of state.players){
+      const rc=remainingCats(p);
+      state.picks[state.players.indexOf(p)]=rc[0].id;
+    }
+    applyScores(); showScore();
+  }
+
+  /* ---------- picking ---------- */
+  let allowReplay=false;
+  function startPicks(){
+    state.phase='picking'; state.pickIdx=0; saveGame();
+    nextPicker();
+  }
+  function nextPicker(){
+    if(state.pickIdx>=N()){ applyScores(); showScore(); return; }
+    if(N()===1){ showPickSheet(); return; }
+    const p=state.players[pickOrder()[state.pickIdx]];
+    $('passRound').textContent='Round '+state.round+' · pick '+(state.pickIdx+1)+' of '+N();
+    $('passName').textContent=p.name;
+    $('passOkBtn').textContent='I’m '+p.name+' — show my sheet';
+    $('replayBtn').style.display = (allowReplay && state.pickIdx===0) ? '' : 'none';
+    showView('pass');
+  }
+  $('passOkBtn').onclick=()=>{ allowReplay=false; showPickSheet(); };
+  $('replayBtn').onclick=()=>{
+    allowReplay=false; showView('game'); setCover(true,'get ready…');
+    $('gamePanel').innerHTML=`<div class="grow"></div><button class="btn pink" id="revealBtn">3… 2… 1… SPLASH! (reveal)</button>`;
+    $('revealBtn').onclick=()=>doReveal(true);
+  };
+  function esc(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+  function catIconHTML(cat){
+    if(cat.type==='color'){
+      const c=COLOR_MAP[cat.id];
+      return `<span class="sw" style="background:${c.face};border-color:${c.pip}"></span><span class="sw" style="background:${c.face};border-color:${c.pip}"></span>`;
+    }
+    if(cat.type==='doubles') return svgDieStr('#dfe9ee','#39404a',5,20)+svgDieStr('#dfe9ee','#39404a',5,20)+'<b style="font-size:11px">=10</b>';
+    if(cat.type==='low') return svgDieStr('#dfe9ee','#39404a',1,17)+svgDieStr('#dfe9ee','#39404a',2,17)+svgDieStr('#dfe9ee','#39404a',3,17);
+    if(cat.type==='num') return svgDieStr('#dfe9ee','#39404a',cat.n,20);
+    return '<span style="font-size:20px">🎉</span>';
+  }
+  let selCat=null;
+  function showPickSheet(){
+    const pi=pickOrder()[state.pickIdx], p=state.players[pi];
+    selCat=null;
+    $('pickWho').textContent=p.name+' — round '+state.round;
+    const sheet=$('sheet'); sheet.innerHTML='';
+    for(const cat of CATEGORIES){
+      const row=document.createElement('div');
+      const scored=cat.id in p.scores;
+      row.className='catRow'+(scored?' scored':'');
+      row.innerHTML=`<span class="ic">${catIconHTML(cat)}</span><span class="lbl">${cat.name}</span>`+
+        (scored?`<span class="pts">${p.scores[cat.id]}</span>`:`<span class="open">○</span>`);
+      if(!scored) row.onclick=()=>{
+        selCat=cat.id;
+        sheet.querySelectorAll('.catRow').forEach(r=>r.classList.remove('sel'));
+        row.classList.add('sel');
+        $('lockBtn').disabled=false;
+        $('lockBtn').textContent='Lock in “'+cat.name+'”';
+      };
+      sheet.appendChild(row);
+    }
+    const strip=$('totalsStrip'); strip.innerHTML='';
+    state.players.forEach((pl,i)=>{
+      const ch=document.createElement('span');
+      ch.className='chip'+(i===pi?' me':'');
+      ch.innerHTML=esc(pl.name)+' <b>'+totalOf(pl)+'</b>';
+      strip.appendChild(ch);
+    });
+    $('lockBtn').disabled=true; $('lockBtn').textContent='Lock it in';
+    showView('pick');
+  }
+  $('lockBtn').onclick=()=>{
+    if(!selCat) return;
+    const pi=pickOrder()[state.pickIdx];
+    state.picks[pi]=selCat;
+    state.pickIdx++; saveGame();
+    vib(15);
+    nextPicker();
+  };
+
+  /* ---------- scoring ---------- */
+  function applyScores(){
+    const results=[];
+    for(let i=0;i<N();i++){
+      const p=state.players[i], catId=state.picks[i];
+      const r=scoreCategory(catId, state.dice);
+      p.scores[catId]=r.pts;
+      results.push({i, catId, pts:r.pts, detail:r.detail});
+    }
+    state.results=results; state.phase='scored'; saveGame();
+  }
+  function showScore(){
+    updateHdr(); showView('game'); setCover(false); drawPool();
+    countdownEl.classList.remove('show');
+    const last=state.round===TOTAL_ROUNDS;
+    let html='<div class="bigmsg">Round '+state.round+' results</div><div class="resList">';
+    for(const r of state.results){
+      const p=state.players[r.i];
+      html+=`<div class="resRow"><div class="who"><b>${esc(p.name)}</b><span class="cat">${CAT_MAP[r.catId].name} — ${esc(r.detail)}</span></div>
+        <span class="gain">+${r.pts}</span><span class="tot">Σ ${totalOf(p)}</span></div>`;
+    }
+    html+='</div>';
+    html+='<button class="btn secondary" id="sheetsBtn" style="margin-bottom:8px;">📋 View scoresheets</button>';
+    if(!last){
+      const next=(state.shaker+1)%N();
+      html+=`<button class="btn" id="nextBtn">Next round → ${esc(state.players[next].name)} shakes</button>`;
+    }else{
+      html+=`<button class="btn pink" id="nextBtn">See final standings 🏆</button>`;
+    }
+    $('gamePanel').innerHTML=html;
+    $('sheetsBtn').onclick=showSheets;
+    $('nextBtn').onclick=()=>{
+      if(last){ gameOver(); return; }
+      state.round++; state.shaker=(state.shaker+1)%N();
+      beginShake();
+    };
+  }
+
+  /* ---------- game over ---------- */
+  function gameOver(){
+    state.phase='over'; saveGame();
+    sndFanfare(); vib([80,60,80]);
+    const ranked=state.players.map((p,i)=>({p,i,total:totalOf(p),party:p.scores.party||0}))
+      .sort((a,b)=> b.total-a.total || b.party-a.party);
+    const best=ranked[0];
+    const winners=ranked.filter(r=>r.total===best.total && r.party===best.party);
+    const el=$('standings'); el.innerHTML='';
+    let note='';
+    ranked.forEach((r,idx)=>{
+      const isWin=winners.includes(r);
+      const row=document.createElement('div');
+      row.className='standRow'+(isWin?' win':'');
+      row.innerHTML=`<span class="plc">${isWin?'👑':(idx+1)+'.'}</span><span class="nm">${esc(r.p.name)}</span>
+        <span class="tt">${r.total}</span>`;
+      el.appendChild(row);
+    });
+    const tiedOnTotal=ranked.filter(r=>r.total===best.total);
+    if(winners.length>1) note='Shared victory — tied on total and Pool Party score!';
+    else if(tiedOnTotal.length>1) note='Tie on total points — broken by highest Pool Party score ('+best.party+').';
+    $('tieNote').textContent=note;
+    showView('over');
+  }
+  $('againBtn').onclick=()=>{ const names=state.players.map(p=>p.name); newGame(names); };
+  $('menuBtn').onclick=()=>{ state=null; store.del(SAVE_KEY); showView('menu'); refreshMenu(); };
+
+  /* ---------- scoresheets viewer ---------- */
+  function showSheets(){
+    if(!state) return;
+    const fresh=new Set((state.results||[]).map(r=>r.i+':'+r.catId));
+    let h='<table class="sheetTable"><thead><tr><th></th>'
+      + state.players.map(p=>'<th>'+esc(p.name)+'</th>').join('')+'</tr></thead><tbody>';
+    for(const cat of CATEGORIES){
+      h+='<tr><td>'+cat.name+'</td>';
+      state.players.forEach((p,i)=>{
+        const has=cat.id in p.scores;
+        const cls=fresh.has(i+':'+cat.id)?' class="new"':(has?'':' class="blank"');
+        h+='<td'+cls+'>'+(has?p.scores[cat.id]:'–')+'</td>';
+      });
+      h+='</tr>';
+    }
+    h+='</tbody><tfoot><tr><td>Total</td>'
+      + state.players.map(p=>'<td>'+totalOf(p)+'</td>').join('')+'</tr></tfoot></table>';
+    $('sheetTableWrap').innerHTML=h;
+    $('sheetBack').classList.add('show');
+  }
+  $('sheetClose').onclick=()=>$('sheetBack').classList.remove('show');
+  $('sheetBack').addEventListener('click', e=>{ if(e.target===$('sheetBack')) $('sheetBack').classList.remove('show'); });
+  $('sheetsBtn2').onclick=showSheets;
+
+  /* ---------- help ---------- */
+  function buildHelp(){
+    const gd='#dfe9ee', gp='#39404a';
+    const sw=c=>`<span class="sw" style="width:14px;height:14px;border-width:2.5px;background:${c.face};border-color:${c.pip}"></span>`;
+    $('helpScores').innerHTML=`
+      <div class="scoreRow"><span class="ic">${COLORS.map(sw).join('')}</span>
+        <span class="tx"><b>Color pairs (6 categories)</b>Add up the two dice of that color.</span></div>
+      <div class="scoreRow"><span class="ic">${svgDieStr(gd,gp,5,18)}${svgDieStr(gd,gp,5,18)}<b style="font-size:11px;color:var(--ink)">=10</b></span>
+        <span class="tx"><b>Doubles</b>10 points for every color pair showing the same number.</span></div>
+      <div class="scoreRow"><span class="ic">${svgDieStr(gd,gp,1,16)}${svgDieStr(gd,gp,2,16)}${svgDieStr(gd,gp,3,16)}</span>
+        <span class="tx"><b>1s, 2s &amp; 3s</b>Add up ALL dice showing 1, 2 or 3, any color.</span></div>
+      <div class="scoreRow"><span class="ic">${svgDieStr(gd,gp,4,16)}${svgDieStr(gd,gp,5,16)}${svgDieStr(gd,gp,6,16)}</span>
+        <span class="tx"><b>Fours · Fives · Sixes (3 categories)</b>Add up all dice showing that number, any color.</span></div>
+      <div class="scoreRow"><span class="ic" style="font-size:22px;justify-content:center">🎉</span>
+        <span class="tx"><b>Pool Party</b>Add up all 12 dice. Also the tiebreaker!</span></div>`;
+  }
+  buildHelp();
+  const openHelp=()=>$('helpBack').classList.add('show');
+  const closeHelp=()=>$('helpBack').classList.remove('show');
+  $('helpBtn').onclick=openHelp;
+  $('helpBtnMenu').onclick=openHelp;
+  $('helpClose').onclick=closeHelp;
+  $('helpBack').addEventListener('click', e=>{ if(e.target===$('helpBack')) closeHelp(); });
+
+  /* ---------- header buttons ---------- */
+  function refreshMute(){ $('muteBtn').textContent=settings.sound?'🔊':'🔇'; $('soundSwitch').classList.toggle('on',settings.sound); }
+  $('muteBtn').onclick=()=>{ settings.sound=!settings.sound; saveSettings(); refreshMute(); };
+  $('quitBtn').onclick=()=>{
+    if(confirm('Quit to menu? The game is saved — you can resume later.')){
+      saveGame(); state=null; shakeActive=false; showView('menu'); refreshMenu();
+    }
+  };
+
+  /* ---------- menu ---------- */
+  let roster=store.get(ROSTER_KEY)||['Player 1','Player 2'];
+  function renderRoster(){
+    const el=$('roster'); el.innerHTML='';
+    roster.forEach((n,i)=>{
+      const row=document.createElement('div'); row.className='rosterRow';
+      row.innerHTML=`<span class="nm">${esc(n)}</span>`;
+      const del=document.createElement('button'); del.textContent='✕';
+      del.onclick=()=>{ roster.splice(i,1); store.set(ROSTER_KEY,roster); renderRoster(); };
+      row.appendChild(del); el.appendChild(row);
+    });
+    $('startBtn').disabled = roster.length<1;
+    $('nameInput').placeholder = roster.length>=8 ? 'Pool is full (8 max)' : 'Add player name…';
+    $('nameInput').disabled = roster.length>=8;
+  }
+  function addName(){
+    const v=$('nameInput').value.trim();
+    if(!v || roster.length>=8) return;
+    roster.push(v.slice(0,12)); store.set(ROSTER_KEY,roster);
+    $('nameInput').value=''; renderRoster();
+  }
+  $('addBtn').onclick=addName;
+  $('nameInput').addEventListener('keydown',e=>{ if(e.key==='Enter') addName(); });
+  $('peekRange').value=settings.peek;
+  $('peekOut').textContent=settings.peek+'s';
+  $('peekRange').oninput=e=>{ settings.peek=parseFloat(e.target.value); $('peekOut').textContent=settings.peek+'s'; saveSettings(); };
+  $('soundSwitch').onclick=()=>{ settings.sound=!settings.sound; saveSettings(); refreshMute(); if(settings.sound){ac(); sndTick();} };
+  $('startBtn').onclick=()=>{ if(roster.length){ ac(); store.del(SAVE_KEY); newGame(roster.slice()); } };
+
+  function refreshMenu(){
+    renderRoster(); refreshMute();
+    const sv=store.get(SAVE_KEY);
+    const ok=sv && sv.phase!=='over' && Array.isArray(sv.players) && sv.players.length;
+    $('resumeBtn').style.display = ok?'':'none';
+    if(ok) $('resumeBtn').textContent='Resume game (round '+sv.round+', '+sv.players.length+' player'+(sv.players.length>1?'s':'')+')';
+  }
+  $('resumeBtn').onclick=()=>{
+    const sv=store.get(SAVE_KEY); if(!sv) return;
+    state=sv; keepAwake(); ac(); updateHdr();
+    if(state.phase==='shake' || !state.dice){ beginShake(); showView('game'); }
+    else if(state.phase==='rolled'){
+      showView('game'); shakeActive=false; settled=true; setCover(true,'dice have settled…');
+      const last=state.round===TOTAL_ROUNDS;
+      $('gamePanel').innerHTML=`<div class="bigmsg">The dice are ready 🎲</div><div class="grow"></div>
+        <button class="btn pink" id="revealBtn">${last?'Reveal & score!':'3… 2… 1… SPLASH! (reveal)'}</button>`;
+      $('revealBtn').onclick=()=>doReveal(state.revealUsed);
+      drawPool();
+    }
+    else if(state.phase==='picking'){
+      allowReplay = state.pickIdx===0 && Object.keys(state.picks).length===0 && state.revealUsed;
+      nextPicker();
+    }
+    else if(state.phase==='scored'){ showScore(); }
+    else { beginShake(); showView('game'); }
+  };
+
+  refreshMenu(); showView('menu');
+})(); }
+</script>
+<!--APP-END-->
+</body>
+</html>
